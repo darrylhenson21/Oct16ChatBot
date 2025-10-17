@@ -80,6 +80,8 @@ export default function BotsPage() {
   }
 
   const getStatusColor = (status: string) => {
+    if (!status) return "bg-gray-100 text-gray-800"
+    
     switch (status) {
       case "ready":
         return "bg-green-100 text-green-800"
@@ -97,6 +99,7 @@ export default function BotsPage() {
   }
 
   const formatStatus = (status: string) => {
+    if (!status) return "Unknown"
     return status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
