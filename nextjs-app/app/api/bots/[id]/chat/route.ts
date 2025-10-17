@@ -1,5 +1,5 @@
 import { streamText } from 'ai'
-import { createOpenAI } from '@ai-sdk/openai'
+import { openai } from '@ai-sdk/openai'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { z } from 'zod'
 
@@ -53,13 +53,8 @@ export async function POST(
       console.log('Private bot access - owner check not implemented yet')
     }
 
-    // Initialize OpenAI client
-    const openai = createOpenAI({
-      apiKey: process.env.OPENAI_API_KEY!,
-    })
-
     // Stream response from OpenAI
-    const result = await streamText({
+    const result = streamText({
       model: openai(bot.model || 'gpt-4o-mini'),
       temperature: bot.temperature || 0.5,
       system: bot.prompt || 'You are a helpful assistant.',
