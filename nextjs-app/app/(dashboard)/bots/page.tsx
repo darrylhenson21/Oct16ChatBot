@@ -33,10 +33,20 @@ export default function BotsPage() {
 
   const loadBots = async () => {
     try {
-      const response = await fetch("/api/bots")
+      console.log('Loading bots...')
+      const response = await fetch("/api/bots", {
+        cache: 'no-store', // Force fresh data
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
+      
       if (response.ok) {
         const data = await response.json()
+        console.log('Bots loaded:', data)
         setBots(data)
+      } else {
+        console.error('Failed to load bots:', response.status)
       }
     } catch (error) {
       console.error("Failed to load bots:", error)
@@ -58,8 +68,12 @@ export default function BotsPage() {
 
       if (response.ok) {
         const bot = await response.json()
+        console.log('Bot created:', bot)
         toast({ title: "Bot created successfully" })
-        router.push(`/bots/${bot.id}`)
+        setShowCreateDialog(false)
+        setNewBotName("")
+        // Reload bots to show the new one
+        await loadBots()
       } else {
         const data = await response.json()
         toast({
@@ -69,6 +83,7 @@ export default function BotsPage() {
         })
       }
     } catch (error) {
+      console.error('Create bot error:', error)
       toast({
         title: "Error",
         description: "Failed to create bot",
@@ -116,7 +131,7 @@ export default function BotsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Your Bots</h1>
-          <p className="text-slate-500 mt-1">You can create up to 20 bots</p>
+          <p className="text-slate-500 mt-1">You can create up to 20 bots ({bots.length}/20)</p>
         </div>
         {bots.length < 20 && (
           <Button onClick={() => setShowCreateDialog(true)} data-testid="create-bot-button">
@@ -186,7 +201,7 @@ export default function BotsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{bot.name}</CardTitle>
+                    <CardTitle className="text-lg">{bot.name || 'Unnamed Bot'}</CardTitle>
                     <span
                       className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${getStatusColor(
                         bot.status
