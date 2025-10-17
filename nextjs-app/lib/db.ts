@@ -12,11 +12,11 @@ export const supabase = createClient(
 )
 
 export const query = async (text: string, params?: any[]) => {
-  console.log('Query:', text, 'Params:', params)
+  console.log('Query:', text.substring(0, 200), 'Params:', params)
   
   try {
     // Handle COUNT queries for bots
-    if (text.includes('COUNT(*)') && text.includes('FROM bots')) {
+    if (text.includes('COUNT(*)') && text.includes('FROM bots') && !text.includes('SELECT b.*')) {
       const accountId = params?.[0]
       const { count, error } = await supabase
         .from('bots')
@@ -25,6 +25,34 @@ export const query = async (text: string, params?: any[]) => {
       
       if (error) throw error
       return { rows: [{ count: count || 0 }], rowCount: 1 }
+    }
+    
+    // Handle complex SELECT with joins (GET /api/bots)
+    if (text.includes('SELECT b.*') && text.includes('domain_count')) {
+      const accountId = params?.[0]
+      console.log('Fetching bots for account:', accountId)
+      
+      const { data, error } = await supabase
+        .from('bots')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
+      }
+      
+      console.log('Found bots:', data?.length || 0)
+      
+      // Add domain_count and source_count (set to 0 for now)
+      const botsWithCounts = (data || []).map(bot => ({
+        ...bot,
+        domain_count: 0,
+        source_count: 0
+      }))
+      
+      return { rows: botsWithCounts, rowCount: botsWithCounts.length }
     }
     
     // Handle SELECT from accounts
@@ -46,27 +74,6 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [], rowCount: 0 }
     }
     
-    // Handle complex SELECT from bots with joins
-    if (text.includes('FROM bots b') && text.includes('domain_count')) {
-      const accountId = params?.[0]
-      const { data, error } = await supabase
-        .from('bots')
-        .select('*')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: false })
-      
-      if (error) throw error
-      
-      // Add domain_count and source_count as 0 for now
-      const botsWithCounts = (data || []).map(bot => ({
-        ...bot,
-        domain_count: 0,
-        source_count: 0
-      }))
-      
-      return { rows: botsWithCounts, rowCount: botsWithCounts.length }
-    }
-    
     // Handle simple SELECT from bots
     if (text.includes('FROM bots') && text.includes('SELECT')) {
       const { data, error } = await supabase.from('bots').select('*')
@@ -75,39 +82,37 @@ export const query = async (text: string, params?: any[]) => {
     }
     
     // Handle INSERT INTO bots
-    if (text.includes('INSERT INTO bots')) {
-      // Simple insert from POST route - only account_id and name
-      if (text.includes('RETURNING *') && params?.length === 2) {
-        const [accountId, name] = params
-        
-        const { data, error } = await supabase
-          .from('bots')
-          .insert({
-            account_id: accountId,
-            name: name,
-            greeting: 'Hi! How can I help you today?',
-            prompt: 'You are a helpful assistant.',
-            model: 'gpt-4o-mini',
-            temperature: 0.7,
-            top_p: 1.0,
-            max_tokens: 512,
-            primary_color: '#0ea5e9',
-            text_color: '#ffffff',
-            background_color: '#1e293b',
-            status: 'needs_source',
-            public: true
-          })
-          .select()
-          .single()
-        
-        if (error) {
-          console.error('Insert bot error:', error)
-          throw error
-        }
-        
-        console.log('Bot created successfully:', data)
-        return { rows: [data], rowCount: 1 }
+    if (text.includes('INSERT INTO bots') && text.includes('RETURNING *')) {
+      const [accountId, name] = params || []
+      console.log('Creating bot:', { accountId, name })
+      
+      const { data, error } = await supabase
+        .from('bots')
+        .insert({
+          account_id: accountId,
+          name: name,
+          greeting: 'Hi! How can I help you today?',
+          prompt: 'You are a helpful assistant.',
+          model: 'gpt-4o-mini',
+          temperature: 0.7,
+          top_p: 1.0,
+          max_tokens: 512,
+          primary_color: '#0ea5e9',
+          text_color: '#ffffff',
+          background_color: '#1e293b',
+          status: 'needs_source',
+          public: true
+        })
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('Insert bot error:', error)
+        throw error
       }
+      
+      console.log('Bot created successfully:', data)
+      return { rows: [data], rowCount: 1 }
     }
     
     // Handle INSERT INTO bot_limits
@@ -125,11 +130,12 @@ export const query = async (text: string, params?: any[]) => {
     
     // Handle other INSERT queries
     if (text.toUpperCase().includes('INSERT INTO')) {
+      console.log('Generic INSERT, returning success')
       return { rows: [], rowCount: 1 }
     }
     
     // Default return
-    console.log('Unhandled query type:', text.substring(0, 50))
+    console.warn('Unhandled query type:', text.substring(0, 100))
     return { rows: [], rowCount: 0 }
     
   } catch (error: any) {
