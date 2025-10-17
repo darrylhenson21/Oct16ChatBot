@@ -55,32 +55,37 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: data || [], rowCount: data?.length || 0 }
     }
     
-    // Handle INSERT INTO bots
+    // Handle INSERT INTO bots - FIXED VERSION
     if (text.includes('INSERT INTO bots')) {
-      // Extract values from params
       const [accountId, name, greeting, systemPrompt, model, temperature, topP, maxTokens, primaryColor, textColor, backgroundColor] = params || []
       
       const { data, error } = await supabase
         .from('bots')
         .insert({
           account_id: accountId,
-          name,
-          greeting,
-          system_prompt: systemPrompt,
-          model,
-          temperature,
-          top_p: topP,
-          max_tokens: maxTokens,
-          primary_color: primaryColor,
-          text_color: textColor,
-          background_color: backgroundColor,
-          status: 'needs_source'
+          name: name,
+          greeting: greeting || 'Hi! How can I help you today?',
+          prompt: systemPrompt || 'You are a helpful assistant.',
+          model: model || 'gpt-4o-mini',
+          temperature: temperature || 0.7,
+          top_p: topP || 1.0,
+          max_tokens: maxTokens || 512,
+          primary_color: primaryColor || '#0ea5e9',
+          text_color: textColor || '#ffffff',
+          background_color: backgroundColor || '#1e293b',
+          status: 'needs_source',
+          public: true
         })
         .select()
         .single()
       
-      if (error) throw error
-      return { rows: data ? [data] : [], rowCount: 1 }
+      if (error) {
+        console.error('Insert error:', error)
+        throw error
+      }
+      
+      console.log('Bot created:', data)
+      return { rows: [data], rowCount: 1 }
     }
     
     // Handle other INSERT queries
