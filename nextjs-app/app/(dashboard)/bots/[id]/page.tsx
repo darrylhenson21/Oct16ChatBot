@@ -3,6 +3,8 @@ import { notFound, redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import BotConfigForm from './BotConfigForm'
 
+export const dynamic = 'force-dynamic'
+
 export default async function BotDetailPage({ params }: { params: { id: string } }) {
   const { data: bot, error } = await supabaseAnon()
     .from('bots')
@@ -22,7 +24,7 @@ export default async function BotDetailPage({ params }: { params: { id: string }
       prompt: formData.get('prompt') as string,
       model: formData.get('model') as string,
       temperature: parseFloat(formData.get('temperature') as string),
-      public: formData.get('public') === 'true',
+      public: formData.get('public') === 'on', // Fixed: checkboxes send 'on', not 'true'
     }
 
     const { error } = await supabaseAnon()
@@ -49,7 +51,6 @@ export default async function BotDetailPage({ params }: { params: { id: string }
         </h1>
         <p className="text-slate-500 mt-1">Configure your chatbot settings</p>
       </div>
-
       <BotConfigForm bot={bot} save={save} embedSnippet={embedSnippet} />
     </div>
   )
