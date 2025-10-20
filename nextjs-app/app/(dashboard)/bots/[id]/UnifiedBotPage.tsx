@@ -98,23 +98,56 @@ export default function UnifiedBotPage({
 
     const userMessage = input.trim()
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+    const newUserMessage = { role: 'user', content: userMessage }
+    const updatedMessages = [...messages, newUserMessage]
+    setMessages(updatedMessages)
     setChatting(true)
 
     try {
       const response = await fetch(`/api/bots/${bot.id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ 
+          messages: updatedMessages
+        }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-      } else {
+      if (!response.ok) {
         toast({ title: 'Error', description: 'Failed to get response', variant: 'destructive' })
+        setChatting(false)
+        return
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let assistantMessage = ''
+
+      if (reader) {
+        setMessages(prev => [...prev, { role: 'assistant', content: '' }])
+        
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              const text = line.slice(2).replace(/^"|"$/g, '')
+              assistantMessage += text
+              setMessages(prev => {
+                const newMessages = [...prev]
+                newMessages[newMessages.length - 1].content = assistantMessage
+                return newMessages
+              })
+            }
+          }
+        }
       }
     } catch (error) {
+      console.error('Chat error:', error)
       toast({ title: 'Error', description: 'Failed to get response', variant: 'destructive' })
     } finally {
       setChatting(false)
