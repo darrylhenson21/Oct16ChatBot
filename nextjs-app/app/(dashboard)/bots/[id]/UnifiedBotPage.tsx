@@ -332,26 +332,27 @@ export default function UnifiedBotPage({
                   className="hidden"
                   id="file-upload"
                 />
-                <label htmlFor="file-upload">
+                <label htmlFor="file-upload" className="cursor-pointer">
                   <Button
                     type="button"
                     variant="outline"
                     disabled={uploading}
-                    asChild
+                    onClick={(e) => {
+                      e.preventDefault()
+                      document.getElementById('file-upload')?.click()
+                    }}
                   >
-                    <span className="cursor-pointer">
-                      {uploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Choose File
-                        </>
-                      )}
-                    </span>
+                    {uploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Choose File
+                      </>
+                    )}
                   </Button>
                 </label>
               </div>
