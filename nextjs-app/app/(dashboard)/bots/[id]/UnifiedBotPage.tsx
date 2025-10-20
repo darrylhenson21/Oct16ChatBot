@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Copy, Check, Upload, Loader2 } from 'lucide-react'
+import { Copy, Check, Upload, Loader2, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 interface Bot {
@@ -42,6 +42,7 @@ export default function UnifiedBotPage({
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([])
   const [input, setInput] = useState('')
   const [chatting, setChatting] = useState(false)
+  const [deletingSource, setDeletingSource] = useState<string | null>(null)
   const { toast } = useToast()
 
   // Load sources
@@ -90,6 +91,31 @@ export default function UnifiedBotPage({
     } finally {
       setUploading(false)
       e.target.value = ''
+    }
+  }
+
+  const handleDeleteSource = async (sourceId: string) => {
+    if (!confirm('Are you sure you want to delete this source? This will remove all associated knowledge from your bot.')) {
+      return
+    }
+
+    setDeletingSource(sourceId)
+    try {
+      const response = await fetch(`/api/bots/${bot.id}/sources?sourceId=${sourceId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        toast({ title: 'Source deleted successfully' })
+        loadSources()
+      } else {
+        const data = await response.json()
+        toast({ title: 'Error', description: data.error || 'Failed to delete source', variant: 'destructive' })
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete source', variant: 'destructive' })
+    } finally {
+      setDeletingSource(null)
     }
   }
 
@@ -406,20 +432,35 @@ export default function UnifiedBotPage({
                   {sources.map((source) => (
                     <div
                       key={source.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 transition-colors"
                     >
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium">{source.name}</p>
                         <p className="text-sm text-muted-foreground">
                           {source.chunk_count} chunks • {source.status}
                         </p>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-xs ${
-                        source.status === 'completed' 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {source.status}
+                      <div className="flex items-center gap-3">
+                        <div className={`px-3 py-1 rounded-full text-xs ${
+                          source.status === 'completed' 
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {source.status}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteSource(source.id)}
+                          disabled={deletingSource === source.id}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          {deletingSource === source.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
                       </div>
                     </div>
                   ))}
