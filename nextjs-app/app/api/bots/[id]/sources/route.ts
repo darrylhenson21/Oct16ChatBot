@@ -132,6 +132,43 @@ export async function POST(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const sourceId = searchParams.get('sourceId')
+
+    if (!sourceId) {
+      return NextResponse.json({ error: 'Source ID required' }, { status: 400 })
+    }
+
+    // Delete all chunks associated with this source
+    await supabase
+      .from('chunks')
+      .delete()
+      .eq('source_id', sourceId)
+
+    // Delete the source
+    const { error } = await supabase
+      .from('sources')
+      .delete()
+      .eq('id', sourceId)
+      .eq('bot_id', params.id)
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error('Delete source error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Failed to delete source' },
+      { status: 500 }
+    )
+  }
+}
+
 function splitIntoChunks(text: string, maxTokens: number): string[] {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
   const chunks: string[] = []
