@@ -5,11 +5,11 @@ import { config } from './lib/config'
 
 const publicPaths = [
   '/unlock', 
-  '/embed',              // ← Added: Allow embed pages
-  '/widget.js',          // ← Added: Allow widget script
+  '/embed',
+  '/widget.js',
   '/api/auth/unlock', 
   '/api/health', 
-  '/api/bots',           // ← Added: Allow bot API calls (includes chat)
+  '/api/bots',
   '/api/leads', 
   '/api/cron/digest'
 ]
@@ -17,7 +17,6 @@ const publicPaths = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow static files and Next.js internals
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/static') ||
@@ -27,12 +26,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Allow public paths
   if (publicPaths.some(path => pathname.startsWith(path))) {
     return NextResponse.next()
   }
 
-  // Check for session cookie
   const token = request.cookies.get(config.session.cookieName)?.value
 
   if (!token) {
@@ -40,7 +37,6 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Verify JWT
     const secret = new TextEncoder().encode(config.session.secret)
     await jwtVerify(token, secret)
     
@@ -53,20 +49,3 @@ export async function middleware(request: NextRequest) {
 export const config_middleware = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 }
-```
-
-## Key Changes:
-
-1. ✅ Added `/embed` - allows `/embed/[botId]` pages
-2. ✅ Added `/widget.js` - allows the widget script to load
-3. ✅ Added `/api/bots` - allows `/api/bots/[id]/chat` to work
-4. ❌ Removed `/embed.js` - you don't have this file
-
----
-
-## Test After Saving:
-
-1. **Restart your dev server** (middleware changes require restart)
-2. **Test the embed URL directly**:
-```
-   http://localhost:3000/embed/b44c37e9-301d-4cef-a659-2c7a0dde568e?title=Test
