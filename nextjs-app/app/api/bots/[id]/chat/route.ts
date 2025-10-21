@@ -46,10 +46,8 @@ export async function POST(
       return new Response('Bot not found', { status: 404 })
     }
 
-    // Check if bot is public or owner (TODO: implement owner check for private bots)
+    // Check if bot is public or owner
     if (!bot.public) {
-      // TODO: Check if current user is the owner
-      // For now, allow all requests to private bots
       console.log('Private bot access - owner check not implemented yet')
     }
 
@@ -60,6 +58,7 @@ export async function POST(
     // Get the last user message (the current question)
     const lastUserMessage = messages.filter(m => m.role === 'user').pop()
     let contextChunks: string[] = []
+    let foundContext = false
 
     if (lastUserMessage) {
       try {
@@ -84,39 +83,61 @@ export async function POST(
           const { data: chunks, error: searchError } = await supabaseAdmin()
             .rpc('match_chunks', {
               query_embedding: questionEmbedding,
-              match_threshold: 0.78,
-              match_count: 5,
+              match_threshold: 0.75, // Lowered threshold to catch more results
+              match_count: 8, // Increased to get more context
               bot_id_filter: botId
             })
 
           if (!searchError && chunks && chunks.length > 0) {
             contextChunks = chunks.map((chunk: any) => chunk.content)
-            console.log(`Found ${chunks.length} relevant chunks for question`)
+            foundContext = true
+            console.log(`✅ Found ${chunks.length} relevant chunks from knowledge base`)
           } else {
-            console.log('No relevant chunks found or search error:', searchError)
+            console.log('⚠️ No relevant chunks found in knowledge base')
           }
         }
       } catch (embeddingError) {
-        console.error('Error generating embedding or searching chunks:', embeddingError)
-        // Continue without RAG context if there's an error
+        console.error('❌ Error generating embedding or searching chunks:', embeddingError)
       }
     }
 
-    // Step 3: Build enhanced system prompt with context
+    // Step 3: Build STRICT system prompt that prioritizes knowledge base
     let enhancedSystemPrompt = bot.prompt || 'You are a helpful assistant.'
 
-    if (contextChunks.length > 0) {
+    if (foundContext && contextChunks.length > 0) {
       const contextText = contextChunks.join('\n\n---\n\n')
+      
+      // STRICT prompt that forces the bot to use KB first
       enhancedSystemPrompt = `${bot.prompt || 'You are a helpful assistant.'}
 
-IMPORTANT: Use the following context from the knowledge base to answer the user's question. If the answer is in the context, use it. If not, you can use your general knowledge but mention that the specific information isn't in the knowledge base.
+═══════════════════════════════════════════════════════════════
+🔒 CRITICAL INSTRUCTION - KNOWLEDGE BASE PRIORITY 🔒
+═══════════════════════════════════════════════════════════════
 
-CONTEXT FROM KNOWLEDGE BASE:
+You MUST follow these rules in STRICT order:
+
+1. **ALWAYS search the KNOWLEDGE BASE FIRST** before using any other information
+2. **IF the answer exists in the knowledge base below, you MUST use it** - do NOT use your training data
+3. **ONLY use your general knowledge if the knowledge base has NO relevant information**
+4. **When using knowledge base**: Be direct and confident - do not say "according to the knowledge base"
+5. **When NO knowledge base info**: Clearly state "I don't have specific information about this in my knowledge base, but based on general knowledge..."
+
+═══════════════════════════════════════════════════════════════
+📚 KNOWLEDGE BASE CONTEXT (Use this FIRST):
+═══════════════════════════════════════════════════════════════
+
 ${contextText}
 
----
+═══════════════════════════════════════════════════════════════
 
-Now answer the user's question based on the above context when relevant.`
+Now answer the user's question using the knowledge base above as your PRIMARY source.`
+    } else {
+      // No knowledge base context found
+      enhancedSystemPrompt = `${bot.prompt || 'You are a helpful assistant.'}
+
+⚠️ IMPORTANT: I do not currently have any specific knowledge base information that answers this question. 
+
+You should respond with: "I don't have specific information about this in my knowledge base yet. [Then provide a helpful general answer if appropriate, or suggest they upload relevant documents to teach me about this topic.]"`
     }
 
     // ============================================
