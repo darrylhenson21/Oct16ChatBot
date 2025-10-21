@@ -81,10 +81,9 @@ export default function UnifiedBotPage({
   
       if (response.ok) {
         toast({ title: 'File uploaded successfully! Processing...' })
-        // FIXED: Reload immediately and again after 2 seconds
         await loadSources()
         setTimeout(() => loadSources(), 2000)
-        setTimeout(() => loadSources(), 5000) // Extra reload for safety
+        setTimeout(() => loadSources(), 5000)
       } else {
         const data = await response.json()
         toast({ title: 'Error', description: data.error || 'Upload failed', variant: 'destructive' })
@@ -147,7 +146,6 @@ export default function UnifiedBotPage({
         return
       }
 
-      // Handle streaming response
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
       let assistantMessage = ''
@@ -208,14 +206,16 @@ export default function UnifiedBotPage({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Helper function to format message content
+  // Helper function to format message content - FIXED VERSION
   const formatContent = (content: string) => {
-    // Replace escaped newlines with actual newlines
-    // Replace escaped quotes
     return content
-      .replace(/\\n/g, '\n')
-      .replace(/\\"/g, '"')
-      .replace(/\\'/g, "'")
+      .replace(/\\n/g, '\n')           // Convert escaped newlines to actual newlines
+      .replace(/\\"/g, '"')            // Remove escaped double quotes
+      .replace(/\\'/g, "'")            // Remove escaped single quotes
+      .replace(/\*\*\*/g, '')          // Remove *** (bold+italic markdown)
+      .replace(/\*\*/g, '')            // Remove ** (bold markdown)
+      .replace(/\*/g, '')              // Remove * (italic markdown)
+      .trim()
   }
 
   return (
@@ -484,7 +484,7 @@ export default function UnifiedBotPage({
         </div>
       )}
 
-      {/* Test Chat Tab - FIXED VERSION */}
+      {/* Test Chat Tab */}
       {activeTab === 'chat' && (
         <Card className="h-[600px] flex flex-col">
           <CardHeader>
