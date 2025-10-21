@@ -68,20 +68,23 @@ export default function UnifiedBotPage({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
+  
     setUploading(true)
     const formData = new FormData()
     formData.append('file', file)
-
+  
     try {
       const response = await fetch(`/api/bots/${bot.id}/sources`, {
         method: 'POST',
         body: formData,
       })
-
+  
       if (response.ok) {
         toast({ title: 'File uploaded successfully! Processing...' })
+        // FIXED: Reload immediately and again after 2 seconds
+        await loadSources()
         setTimeout(() => loadSources(), 2000)
+        setTimeout(() => loadSources(), 5000) // Extra reload for safety
       } else {
         const data = await response.json()
         toast({ title: 'Error', description: data.error || 'Upload failed', variant: 'destructive' })
