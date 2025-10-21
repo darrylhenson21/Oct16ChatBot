@@ -1,3 +1,6 @@
+// nextjs-app/app/api/bots/[id]/chat/route.ts
+// Why: Ensure KB is actually used; never silently skip retrieval.
+
 import { streamText } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { supabaseAdmin } from '@/lib/supabaseServer'
@@ -7,155 +10,154 @@ const Body = z.object({
   messages: z.array(
     z.object({
       role: z.enum(['user', 'assistant', 'system']),
-      content: z.string(),
+      content: z.string().min(1).max(4000),
     })
-  ),
+  ).min(1),
 })
+
+function cosineSim(a: number[], b: number[]) {
+  // Why: Fallback ranking when RPC is missing/empty.
+  let dot = 0, na = 0, nb = 0
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+  const denom = Math.sqrt(na) * Math.sqrt(nb) || 1
+  return dot / denom
+}
+
+const THRESHOLD = 0.70      // recall first; adjust later
+const TOP_K = 8
 
 export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      return new Response('Server misconfigured: OPENAI_API_KEY missing', { status: 500 })
+    }
+
+    const parse = Body.safeParse(await req.json())
+    if (!parse.success) return new Response('Invalid request body', { status: 400 })
+    const { messages } = parse.data
+
     const botId = params.id
-    const body = await req.json()
-    
-    // Validate request body
-    const parsed = Body.safeParse(body)
-    if (!parsed.success) {
-      return new Response('Invalid request body', { status: 400 })
-    }
+    const { data: bot, error: botErr } = await supabaseAdmin()
+      .from('bots').select('*').eq('id', botId).single()
 
-    const { messages } = parsed.data
-
-    // Guard: Reject if message too long
-    for (const msg of messages) {
-      if (msg.content.length > 4000) {
-        return new Response('Message too long (max 4000 chars)', { status: 400 })
-      }
-    }
-
-    // Fetch bot configuration from Supabase
-    const { data: bot, error } = await supabaseAdmin()
-      .from('bots')
-      .select('*')
-      .eq('id', botId)
-      .single()
-
-    if (error || !bot) {
-      return new Response('Bot not found', { status: 404 })
-    }
-
-    // Check if bot is public or owner
+    if (botErr || !bot) return new Response('Bot not found', { status: 404 })
     if (!bot.public) {
+      // TODO: verify owner/session
       console.log('Private bot access - owner check not implemented yet')
     }
 
-    // ============================================
-    // RAG IMPLEMENTATION - KNOWLEDGE BASE SEARCH
-    // ============================================
-
-    // Get the last user message (the current question)
-    const lastUserMessage = messages.filter(m => m.role === 'user').pop()
+    // ==== RAG ====
+    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
     let contextChunks: string[] = []
     let foundContext = false
 
     if (lastUserMessage) {
-      try {
-        // Step 1: Generate embedding for the user's question
-        const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'text-embedding-3-small',
-            input: lastUserMessage.content,
-          }),
-        })
+      // 1) embed query
+      const embRes = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: lastUserMessage.content }),
+      })
+      if (!embRes.ok) {
+        console.error('Embedding HTTP error:', embRes.status, await embRes.text())
+      } else {
+        const { data } = await embRes.json() as { data: { embedding: number[] }[] }
+        const queryEmbedding = data?.[0]?.embedding
 
-        if (embeddingResponse.ok) {
-          const embeddingData = await embeddingResponse.json()
-          const questionEmbedding = embeddingData.data[0].embedding
+        // 2) primary: RPC match_chunks
+        let rpcWorked = false
+        try {
+          const { data: chunks, error } = await supabaseAdmin().rpc('match_chunks', {
+            query_embedding: queryEmbedding,
+            match_threshold: THRESHOLD,
+            match_count: TOP_K,
+            bot_id_filter: botId,
+          })
 
-          // Step 2: Search for similar chunks in the knowledge base
-          const { data: chunks, error: searchError } = await supabaseAdmin()
-            .rpc('match_chunks', {
-              query_embedding: questionEmbedding,
-              match_threshold: 0.75, // Lowered threshold to catch more results
-              match_count: 8, // Increased to get more context
-              bot_id_filter: botId
-            })
-
-          if (!searchError && chunks && chunks.length > 0) {
-            contextChunks = chunks.map((chunk: any) => chunk.content)
+          if (error) {
+            console.warn('match_chunks RPC error:', error)
+          } else if (chunks?.length) {
+            contextChunks = chunks.map((c: any) => c.content)
             foundContext = true
-            console.log(`✅ Found ${chunks.length} relevant chunks from knowledge base`)
+            rpcWorked = true
+            console.log(`KB: RPC returned ${chunks.length} chunks`)
+          }
+        } catch (e) {
+          console.warn('match_chunks RPC threw:', e)
+        }
+
+        // 3) fallback: client-side cosine ranking
+        if (!rpcWorked) {
+          const { data: rows, error } = await supabaseAdmin()
+            .from('chunks')
+            .select('id, content, embedding, bot_id')
+            .eq('bot_id', botId)
+            .limit(200)  // safety cap
+          if (error) {
+            console.warn('Fallback chunks select error:', error)
+          } else if (rows?.length) {
+            const ranked = rows
+              .map((r: any) => ({ content: r.content, sim: cosineSim(queryEmbedding, r.embedding as number[]) }))
+              .sort((a, b) => b.sim - a.sim)
+              .filter(x => x.sim >= THRESHOLD)
+              .slice(0, TOP_K)
+            if (ranked.length) {
+              contextChunks = ranked.map(x => x.content)
+              foundContext = true
+              console.log(`KB: Fallback ranked ${ranked.length} chunks`)
+            } else {
+              console.log('KB: Fallback found no chunks above threshold')
+            }
           } else {
-            console.log('⚠️ No relevant chunks found in knowledge base')
+            console.log('KB: No chunks exist for this bot')
           }
         }
-      } catch (embeddingError) {
-        console.error('❌ Error generating embedding or searching chunks:', embeddingError)
       }
     }
 
-    // Step 3: Build STRICT system prompt that prioritizes knowledge base
-    let enhancedSystemPrompt = bot.prompt || 'You are a helpful assistant.'
-
-    if (foundContext && contextChunks.length > 0) {
+    // 4) system prompt
+    let systemPrompt: string
+    if (foundContext && contextChunks.length) {
       const contextText = contextChunks.join('\n\n---\n\n')
-      
-      // STRICT prompt that forces the bot to use KB first
-      enhancedSystemPrompt = `${bot.prompt || 'You are a helpful assistant.'}
+      systemPrompt = `${bot.prompt || 'You are a helpful assistant.'}
 
 ═══════════════════════════════════════════════════════════════
 🔒 CRITICAL INSTRUCTION - KNOWLEDGE BASE PRIORITY 🔒
 ═══════════════════════════════════════════════════════════════
+1) ALWAYS search the KNOWLEDGE BASE FIRST.
+2) If the answer exists in the knowledge base below, USE IT. Do NOT rely on general training.
+3) Only use general knowledge if the knowledge base has NO relevant information.
+4) When using the knowledge base: be direct and confident.
+5) If NO knowledge base info is relevant: clearly say so.
 
-You MUST follow these rules in STRICT order:
-
-1. **ALWAYS search the KNOWLEDGE BASE FIRST** before using any other information
-2. **IF the answer exists in the knowledge base below, you MUST use it** - do NOT use your training data
-3. **ONLY use your general knowledge if the knowledge base has NO relevant information**
-4. **When using knowledge base**: Be direct and confident - do not say "according to the knowledge base"
-5. **When NO knowledge base info**: Clearly state "I don't have specific information about this in my knowledge base, but based on general knowledge..."
-
-═══════════════════════════════════════════════════════════════
-📚 KNOWLEDGE BASE CONTEXT (Use this FIRST):
-═══════════════════════════════════════════════════════════════
-
+📚 KNOWLEDGE BASE CONTEXT (use first):
 ${contextText}
-
-═══════════════════════════════════════════════════════════════
-
-Now answer the user's question using the knowledge base above as your PRIMARY source.`
+`
     } else {
-      // No knowledge base context found
-      enhancedSystemPrompt = `${bot.prompt || 'You are a helpful assistant.'}
+      systemPrompt = `${bot.prompt || 'You are a helpful assistant.'}
 
-⚠️ IMPORTANT: I do not currently have any specific knowledge base information that answers this question. 
-
-You should respond with: "I don't have specific information about this in my knowledge base yet. [Then provide a helpful general answer if appropriate, or suggest they upload relevant documents to teach me about this topic.]"`
+⚠️ I do not currently have knowledge-base context for this question.
+Say: "I don't have specific information about this in my knowledge base yet." 
+Then optionally provide general guidance or suggest uploading relevant docs.`
     }
 
-    // ============================================
-    // END RAG IMPLEMENTATION
-    // ============================================
-
-    // Stream response from OpenAI with enhanced prompt
+    // 5) stream
     const result = streamText({
       model: openai(bot.model || 'gpt-4o-mini'),
-      temperature: bot.temperature || 0.5,
-      system: enhancedSystemPrompt,
+      temperature: bot.temperature ?? 0.5,
+      system: systemPrompt,
       messages,
     })
-
-    // Return streaming response
     return result.toDataStreamResponse()
-  } catch (error: any) {
-    console.error('Chat API error:', error)
+  } catch (err) {
+    console.error('Chat API error:', err)
     return new Response('Internal server error', { status: 500 })
   }
 }
