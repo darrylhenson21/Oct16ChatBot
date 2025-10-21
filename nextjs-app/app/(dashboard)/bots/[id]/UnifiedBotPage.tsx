@@ -205,6 +205,16 @@ export default function UnifiedBotPage({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Helper function to format message content
+  const formatContent = (content: string) => {
+    // Replace escaped newlines with actual newlines
+    // Replace escaped quotes
+    return content
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+  }
+
   return (
     <div className="space-y-6">
       {/* Navigation Tabs */}
@@ -471,14 +481,14 @@ export default function UnifiedBotPage({
         </div>
       )}
 
-      {/* Test Chat Tab */}
+      {/* Test Chat Tab - FIXED VERSION */}
       {activeTab === 'chat' && (
         <Card className="h-[600px] flex flex-col">
           <CardHeader>
             <CardTitle>Test Your Bot</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col p-4">
-            <div className="flex-1 overflow-y-auto space-y-4 mb-4 p-4 border rounded-lg">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 mb-4 p-4 border rounded-lg">
               {messages.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                   Start a conversation to test your bot
@@ -490,16 +500,25 @@ export default function UnifiedBotPage({
                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-lg p-3 ${
+                      className={`max-w-[80%] rounded-lg p-3 break-words ${
                         msg.role === 'user'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted'
                       }`}
                     >
-                      {msg.content}
+                      <div className="whitespace-pre-wrap break-words overflow-wrap-anywhere">
+                        {formatContent(msg.content)}
+                      </div>
                     </div>
                   </div>
                 ))
+              )}
+              {chatting && messages[messages.length - 1]?.role !== 'assistant' && (
+                <div className="flex justify-start">
+                  <div className="bg-muted rounded-lg p-3">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                </div>
               )}
             </div>
 
