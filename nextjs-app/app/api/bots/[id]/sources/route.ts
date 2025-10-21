@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { supabase } from '@/lib/db'
+import { supabaseAdmin } from '@/lib/supabaseServer'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { data: sources, error } = await supabase
+    const { data: sources, error } = await supabaseAdmin()
       .from('sources')
       .select('id, name, type, status, created_at')
       .eq('bot_id', params.id)
@@ -22,7 +22,7 @@ export async function GET(
     // Get chunk counts for each source
     const sourcesWithCounts = await Promise.all(
       sources.map(async (source) => {
-        const { count } = await supabase
+        const { count } = await supabaseAdmin()
           .from('chunks')
           .select('*', { count: 'exact', head: true })
           .eq('source_id', source.id)
@@ -53,15 +53,25 @@ export async function POST(
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
+    console.log(`📤 Processing file: ${file.name}`)
+
     const buffer = Buffer.from(await file.arrayBuffer())
     let text = ''
     let fileType = ''
 
+    // Extract text based on file type
     if (file.name.endsWith('.pdf')) {
-      const pdfParse = (await import('pdf-parse')).default
-      const pdfData = await pdfParse(buffer)
-      text = pdfData.text
-      fileType = 'pdf'
+      try {
+        const pdfParse = (await import('pdf-parse')).default
+        const pdfData = await pdfParse(buffer)
+        text = pdfData.text
+        fileType = 'pdf'
+      } catch (error) {
+        console.error('PDF parsing error:', error)
+        return NextResponse.json({ 
+          error: 'PDF parsing failed. Try converting to TXT or DOCX.' 
+        }, { status: 400 })
+      }
     } else if (file.name.endsWith('.txt')) {
       text = buffer.toString('utf-8')
       fileType = 'txt'
@@ -71,14 +81,21 @@ export async function POST(
       text = result.value
       fileType = 'docx'
     } else {
-      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 })
+      return NextResponse.json({ 
+        error: 'Unsupported file type. Use PDF, TXT, or DOCX.' 
+      }, { status: 400 })
     }
 
     if (!text || text.trim().length === 0) {
-      return NextResponse.json({ error: 'No text content found' }, { status: 400 })
+      return NextResponse.json({ 
+        error: 'No text content found in file' 
+      }, { status: 400 })
     }
 
-    const { data: source, error: sourceError } = await supabase
+    console.log(`📝 Extracted ${text.length} characters`)
+
+    // Create source record
+    const { data: source, error: sourceError } = await supabaseAdmin()
       .from('sources')
       .insert({
         bot_id: params.id,
@@ -89,33 +106,59 @@ export async function POST(
       .select()
       .single()
 
-    if (sourceError) throw sourceError
+    if (sourceError) {
+      console.error('Source creation error:', sourceError)
+      throw sourceError
+    }
 
+    console.log(`✅ Source created: ${source.id}`)
+
+    // Split text into chunks
     const chunks = splitIntoChunks(text, 500)
+    console.log(`📦 Split into ${chunks.length} chunks`)
 
+    // Process each chunk
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
 
-      const embeddingResponse = await openai.embeddings.create({
-        model: 'text-embedding-ada-002',
-        input: chunk,
-      })
+      try {
+        // Generate embedding using the CORRECT model
+        const embeddingResponse = await openai.embeddings.create({
+          model: 'text-embedding-3-small', // FIXED: Using correct model
+          input: chunk,
+        })
 
-      const embedding = embeddingResponse.data[0].embedding
+        const embedding = embeddingResponse.data[0].embedding
 
-      await supabase.from('chunks').insert({
-        source_id: source.id,
-        bot_id: params.id,
-        content: chunk,
-        embedding: embedding,
-        chunk_index: i,
-      })
+        // Insert chunk with embedding (removed chunk_index)
+        const { error: chunkError } = await supabaseAdmin()
+          .from('chunks')
+          .insert({
+            source_id: source.id,
+            bot_id: params.id,
+            content: chunk,
+            embedding: embedding,
+          })
+
+        if (chunkError) {
+          console.error(`Chunk ${i} insert error:`, chunkError)
+          throw chunkError
+        }
+
+        console.log(`✅ Chunk ${i + 1}/${chunks.length} processed`)
+      } catch (chunkError) {
+        console.error(`Error processing chunk ${i}:`, chunkError)
+        // Continue processing other chunks even if one fails
+      }
     }
 
-    await supabase
+    // Update source status to completed
+    await supabaseAdmin()
       .from('sources')
       .update({ status: 'completed' })
       .eq('id', source.id)
+
+    console.log(`🎉 Processing complete: ${chunks.length} chunks created`)
 
     return NextResponse.json({ 
       success: true,
@@ -124,7 +167,7 @@ export async function POST(
     })
 
   } catch (error: any) {
-    console.error('Upload error:', error)
+    console.error('❌ Upload error:', error)
     return NextResponse.json(
       { error: error.message || 'Upload failed' },
       { status: 500 }
@@ -145,13 +188,13 @@ export async function DELETE(
     }
 
     // Delete all chunks associated with this source
-    await supabase
+    await supabaseAdmin()
       .from('chunks')
       .delete()
       .eq('source_id', sourceId)
 
     // Delete the source
-    const { error } = await supabase
+    const { error } = await supabaseAdmin()
       .from('sources')
       .delete()
       .eq('id', sourceId)
