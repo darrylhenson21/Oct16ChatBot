@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Settings, Trash2, Copy } from "lucide-react"
+import { Plus, Settings, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Bot {
@@ -18,13 +18,15 @@ interface Bot {
   updated_at: string
 }
 
-const MAX_BOTS = 10 // Bot limit
+const MAX_BOTS = 10
 
 export default function BotsPage() {
   const [bots, setBots] = useState<Bot[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null)
   const [newBotName, setNewBotName] = useState("")
   const router = useRouter()
   const { toast } = useToast()
@@ -92,6 +94,37 @@ export default function BotsPage() {
       })
     } finally {
       setCreating(false)
+    }
+  }
+
+  const deleteBot = async (botId: string) => {
+    setDeleting(botId)
+    try {
+      const response = await fetch(`/api/bots/${botId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast({ title: "Bot deleted successfully" })
+        setShowDeleteDialog(null)
+        await loadBots()
+      } else {
+        const data = await response.json()
+        toast({
+          title: "Error",
+          description: data.error || "Failed to delete bot",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Delete bot error:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete bot",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -199,6 +232,41 @@ export default function BotsPage() {
         </div>
       )}
 
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Delete Bot</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-slate-600">
+                Are you sure you want to delete this bot? This action cannot be undone and will remove all associated data, including sources and chat history.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => deleteBot(showDeleteDialog)}
+                  disabled={deleting === showDeleteDialog}
+                  variant="destructive"
+                  className="flex-1"
+                  data-testid="confirm-delete-bot"
+                >
+                  {deleting === showDeleteDialog ? "Deleting..." : "Delete"}
+                </Button>
+                <Button
+                  onClick={() => setShowDeleteDialog(null)}
+                  variant="outline"
+                  className="flex-1"
+                  disabled={deleting === showDeleteDialog}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Bots Grid */}
       {bots.length === 0 ? (
         <div className="text-center py-12">
@@ -211,9 +279,19 @@ export default function BotsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {bots.map((bot) => (
-            <Card key={bot.id} className="hover:shadow-lg transition-shadow" data-testid={`bot-card-${bot.id}`}>
+            <Card key={bot.id} className="hover:shadow-lg transition-shadow relative" data-testid={`bot-card-${bot.id}`}>
+              {/* Delete button in top right */}
+              <button
+                onClick={() => setShowDeleteDialog(bot.id)}
+                className="absolute top-3 right-3 p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                title="Delete bot"
+                data-testid={`delete-bot-${bot.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+
               <CardHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between pr-8">
                   <div className="flex-1">
                     <CardTitle className="text-lg">{bot.name || 'Unnamed Bot'}</CardTitle>
                     <span
