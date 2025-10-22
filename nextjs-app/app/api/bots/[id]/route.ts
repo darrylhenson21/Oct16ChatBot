@@ -95,14 +95,34 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await query(
+    console.log('Attempting to delete bot:', params.id, 'for account:', session.accountId)
+
+    const result = await query(
       'DELETE FROM bots WHERE id = $1 AND account_id = $2',
       [params.id, session.accountId]
     )
 
-    return NextResponse.json({ success: true })
+    console.log('Delete result:', result)
+    console.log('Rows deleted:', result.rowCount)
+
+    if (result.rowCount === 0) {
+      console.log('No bot found to delete')
+      return NextResponse.json({ 
+        error: 'Bot not found or already deleted' 
+      }, { status: 404 })
+    }
+
+    console.log('Bot deleted successfully')
+    return NextResponse.json({ 
+      success: true,
+      deleted: params.id,
+      rowCount: result.rowCount
+    })
   } catch (error) {
     console.error('Delete bot error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
