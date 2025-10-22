@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Settings, Trash2 } from "lucide-react"
+import { Plus, Settings, Trash2, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Bot {
@@ -23,6 +23,7 @@ const MAX_BOTS = 10
 export default function BotsPage() {
   const [bots, setBots] = useState<Bot[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
@@ -33,10 +34,20 @@ export default function BotsPage() {
 
   useEffect(() => {
     loadBots()
+    
+    // Auto-refresh every 10 seconds to catch status updates
+    const interval = setInterval(() => {
+      loadBots(true) // silent refresh
+    }, 10000)
+    
+    return () => clearInterval(interval)
   }, [])
 
-  const loadBots = async () => {
+  const loadBots = async (silent = false) => {
     try {
+      if (!silent) {
+        setRefreshing(true)
+      }
       console.log('Loading bots...')
       const response = await fetch("/api/bots", {
         cache: 'no-store',
@@ -56,6 +67,7 @@ export default function BotsPage() {
       console.error("Failed to load bots:", error)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -107,7 +119,12 @@ export default function BotsPage() {
       if (response.ok) {
         toast({ title: "Bot deleted successfully" })
         setShowDeleteDialog(null)
-        await loadBots()
+        
+        // Immediately remove from UI for instant feedback
+        setBots(prevBots => prevBots.filter(bot => bot.id !== botId))
+        
+        // Double-check with server after a short delay
+        setTimeout(() => loadBots(true), 500)
       } else {
         const data = await response.json()
         toast({
@@ -171,12 +188,23 @@ export default function BotsPage() {
             You can create up to {MAX_BOTS} bots ({bots.length}/{MAX_BOTS})
           </p>
         </div>
-        {canCreateMore && (
-          <Button onClick={() => setShowCreateDialog(true)} data-testid="create-bot-button">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Bot
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => loadBots()} 
+            variant="outline" 
+            size="lg"
+            disabled={refreshing}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
           </Button>
-        )}
+          {canCreateMore && (
+            <Button onClick={() => setShowCreateDialog(true)} data-testid="create-bot-button">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Bot
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Warning when limit reached */}
