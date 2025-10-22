@@ -13,8 +13,8 @@ export async function GET(
     }
 
     const result = await query(
-      'SELECT * FROM bots WHERE id = $1 AND account_id = $2',
-      [params.id, session.accountId]
+      'SELECT * FROM bots WHERE id = $1',
+      [params.id]
     )
 
     if (result.rows.length === 0) {
@@ -65,11 +65,11 @@ export async function PATCH(
     }
 
     updates.push('updated_at = NOW()')
-    values.push(params.id, session.accountId)
+    values.push(params.id)
 
     const result = await query(
       `UPDATE bots SET ${updates.join(', ')} 
-       WHERE id = $${paramCount} AND account_id = $${paramCount + 1}
+       WHERE id = $${paramCount}
        RETURNING *`,
       values
     )
@@ -95,18 +95,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('Attempting to delete bot:', params.id, 'for account:', session.accountId)
+    console.log('Attempting to delete bot:', params.id)
 
     const result = await query(
-      'DELETE FROM bots WHERE id = $1 AND account_id = $2',
-      [params.id, session.accountId]
+      'DELETE FROM bots WHERE id = $1',
+      [params.id]
     )
 
-    console.log('Delete result:', result)
     console.log('Rows deleted:', result.rowCount)
 
     if (result.rowCount === 0) {
-      console.log('No bot found to delete')
       return NextResponse.json({ 
         error: 'Bot not found or already deleted' 
       }, { status: 404 })
@@ -115,8 +113,7 @@ export async function DELETE(
     console.log('Bot deleted successfully')
     return NextResponse.json({ 
       success: true,
-      deleted: params.id,
-      rowCount: result.rowCount
+      deleted: params.id
     })
   } catch (error) {
     console.error('Delete bot error:', error)
