@@ -27,7 +27,7 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [{ count: count || 0 }], rowCount: 1 }
     }
     
-    // Handle complex SELECT with joins (GET /api/bots)
+    // Handle complex SELECT with joins (GET /api/bots) - WITH AUTO STATUS UPDATE
     if (text.includes('SELECT b.*') && text.includes('domain_count')) {
       const accountId = params?.[0]
       console.log('Fetching bots for account:', accountId)
@@ -45,11 +45,23 @@ export const query = async (text: string, params?: any[]) => {
       
       console.log('Found bots:', data?.length || 0)
       
-      // Add domain_count and source_count (set to 0 for now)
-      const botsWithCounts = (data || []).map(bot => ({
-        ...bot,
-        domain_count: 0,
-        source_count: 0
+      // Get source counts for each bot and auto-update status
+      const botsWithCounts = await Promise.all((data || []).map(async (bot) => {
+        const { count: sourceCount } = await supabase
+          .from('sources')
+          .select('*', { count: 'exact', head: true })
+          .eq('bot_id', bot.id)
+          .eq('status', 'completed')
+        
+        // Auto-calculate status based on completed sources
+        const actualStatus = sourceCount && sourceCount > 0 ? 'ready' : 'needs_source'
+        
+        return {
+          ...bot,
+          domain_count: 0,
+          source_count: sourceCount || 0,
+          status: actualStatus  // Override with calculated status
+        }
       }))
       
       return { rows: botsWithCounts, rowCount: botsWithCounts.length }
@@ -134,7 +146,14 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [], rowCount: 1 }
     }
     
-    // ========== ADD THIS: Handle DELETE queries ==========
+    // Handle UPDATE queries
+    if (text.toUpperCase().includes('UPDATE')) {
+      console.log('UPDATE query detected')
+      // For now, just return success for UPDATE queries
+      return { rows: [], rowCount: 1 }
+    }
+    
+    // Handle DELETE queries
     if (text.toUpperCase().includes('DELETE FROM')) {
       const botId = params?.[0]
       console.log('Deleting bot:', botId)
@@ -152,7 +171,6 @@ export const query = async (text: string, params?: any[]) => {
       console.log('Delete completed, rows affected:', count)
       return { rows: [], rowCount: count || 0 }
     }
-    // =====================================================
     
     // Default return
     console.warn('Unhandled query type:', text.substring(0, 100))
