@@ -18,6 +18,8 @@ interface Bot {
   updated_at: string
 }
 
+const MAX_BOTS = 10 // Bot limit
+
 export default function BotsPage() {
   const [bots, setBots] = useState<Bot[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,7 +37,7 @@ export default function BotsPage() {
     try {
       console.log('Loading bots...')
       const response = await fetch("/api/bots", {
-        cache: 'no-store', // Force fresh data
+        cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache'
         }
@@ -72,7 +74,6 @@ export default function BotsPage() {
         toast({ title: "Bot created successfully" })
         setShowCreateDialog(false)
         setNewBotName("")
-        // Reload bots to show the new one
         await loadBots()
       } else {
         const data = await response.json()
@@ -118,6 +119,8 @@ export default function BotsPage() {
     return status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
+  const canCreateMore = bots.length < MAX_BOTS
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -131,15 +134,26 @@ export default function BotsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Your Bots</h1>
-          <p className="text-slate-500 mt-1">You can create up to 20 bots ({bots.length}/20)</p>
+          <p className="text-slate-500 mt-1">
+            You can create up to {MAX_BOTS} bots ({bots.length}/{MAX_BOTS})
+          </p>
         </div>
-        {bots.length < 20 && (
+        {canCreateMore && (
           <Button onClick={() => setShowCreateDialog(true)} data-testid="create-bot-button">
             <Plus className="mr-2 h-4 w-4" />
             Create Bot
           </Button>
         )}
       </div>
+
+      {/* Warning when limit reached */}
+      {!canCreateMore && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <p className="text-yellow-800 text-sm">
+            ⚠️ You've reached the maximum limit of {MAX_BOTS} bots. Delete a bot to create a new one.
+          </p>
+        </div>
+      )}
 
       {/* Create Dialog */}
       {showCreateDialog && (
@@ -231,12 +245,12 @@ export default function BotsPage() {
           ))}
 
           {/* Empty slots */}
-          {bots.length < 20 &&
-            Array.from({ length: Math.min(4, 20 - bots.length) }).map((_, i) => (
-              <Card key={`empty-${i}`} className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center h-48">
-                  <Plus className="h-12 w-12 text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-500">Empty slot</p>
+          {Array.from({ length: MAX_BOTS - bots.length }).map((_, i) => (
+            <Card key={`empty-${i}`} className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center h-48">
+                <Plus className="h-12 w-12 text-slate-300 mb-2" />
+                <p className="text-sm text-slate-500">Empty slot</p>
+                {canCreateMore && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -245,9 +259,10 @@ export default function BotsPage() {
                   >
                     Create bot
                   </Button>
-                </CardContent>
-              </Card>
-            ))}
+                )}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>
