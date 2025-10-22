@@ -134,6 +134,26 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [], rowCount: 1 }
     }
     
+    // ========== ADD THIS: Handle DELETE queries ==========
+    if (text.toUpperCase().includes('DELETE FROM')) {
+      const botId = params?.[0]
+      console.log('Deleting bot:', botId)
+      
+      const { error, count } = await supabase
+        .from('bots')
+        .delete({ count: 'exact' })
+        .eq('id', botId)
+      
+      if (error) {
+        console.error('Delete bot error:', error)
+        throw error
+      }
+      
+      console.log('Delete completed, rows affected:', count)
+      return { rows: [], rowCount: count || 0 }
+    }
+    // =====================================================
+    
     // Default return
     console.warn('Unhandled query type:', text.substring(0, 100))
     return { rows: [], rowCount: 0 }
