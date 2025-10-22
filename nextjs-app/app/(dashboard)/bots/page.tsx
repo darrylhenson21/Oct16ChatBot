@@ -110,26 +110,38 @@ export default function BotsPage() {
   }
 
   const deleteBot = async (botId: string) => {
+    console.log('Attempting to delete bot:', botId)
     setDeleting(botId)
     try {
       const response = await fetch(`/api/bots/${botId}`, {
         method: "DELETE",
       })
 
+      console.log('Delete response status:', response.status)
+      console.log('Delete response ok:', response.ok)
+
       if (response.ok) {
+        const result = await response.json()
+        console.log('Delete result:', result)
+        
         toast({ title: "Bot deleted successfully" })
         setShowDeleteDialog(null)
         
         // Immediately remove from UI for instant feedback
-        setBots(prevBots => prevBots.filter(bot => bot.id !== botId))
+        setBots(prevBots => {
+          const filtered = prevBots.filter(bot => bot.id !== botId)
+          console.log('Bots after filter:', filtered)
+          return filtered
+        })
         
         // Double-check with server after a short delay
         setTimeout(() => loadBots(true), 500)
       } else {
-        const data = await response.json()
+        const errorData = await response.json()
+        console.error('Delete failed:', errorData)
         toast({
           title: "Error",
-          description: data.error || "Failed to delete bot",
+          description: errorData.error || "Failed to delete bot",
           variant: "destructive",
         })
       }
@@ -308,12 +320,18 @@ export default function BotsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {bots.map((bot) => (
             <Card key={bot.id} className="hover:shadow-lg transition-shadow relative" data-testid={`bot-card-${bot.id}`}>
-              {/* Delete button in top right */}
+              {/* Delete button in top right - FIXED VERSION */}
               <button
-                onClick={() => setShowDeleteDialog(bot.id)}
-                className="absolute top-3 right-3 p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  console.log('Delete button clicked for bot:', bot.id)
+                  setShowDeleteDialog(bot.id)
+                }}
+                className="absolute top-3 right-3 p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors z-10"
                 title="Delete bot"
                 data-testid={`delete-bot-${bot.id}`}
+                type="button"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
