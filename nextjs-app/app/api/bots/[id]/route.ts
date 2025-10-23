@@ -7,13 +7,11 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
+    // Allow public access for widget to check bot settings
+    // No session check needed for GET - widget needs this to check require_prechat
+    
     const result = await query(
-      'SELECT * FROM bots WHERE id = $1',
+      'SELECT id, name, require_prechat, public FROM bots WHERE id = $1',
       [params.id]
     )
 
@@ -21,7 +19,14 @@ export async function GET(
       return NextResponse.json({ error: 'Bot not found' }, { status: 404 })
     }
 
-    return NextResponse.json(result.rows[0])
+    // Return only public-safe fields
+    const bot = result.rows[0]
+    return NextResponse.json({
+      id: bot.id,
+      name: bot.name,
+      require_prechat: bot.require_prechat || false,
+      public: bot.public || false,
+    })
   } catch (error) {
     console.error('Get bot error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -45,7 +50,8 @@ export async function PATCH(
       'name', 'greeting', 'system_prompt', 'temperature', 'top_p', 'max_tokens',
       'primary_color', 'text_color', 'background_color', 'status',
       'lead_fields', 'require_email', 'instant_lead_email', 'lead_email_recipients',
-      'daily_digest_enabled', 'daily_digest_time', 'webhook_url', 'webhook_secret', 'webhook_events'
+      'daily_digest_enabled', 'daily_digest_time', 'webhook_url', 'webhook_secret', 'webhook_events',
+      'require_prechat' // ADD THIS TO ALLOWED FIELDS
     ]
 
     const updates: string[] = []
@@ -96,7 +102,7 @@ export async function DELETE(
     }
 
     console.log('Attempting to delete bot:', params.id)
-
+    
     const result = await query(
       'DELETE FROM bots WHERE id = $1',
       [params.id]
@@ -111,6 +117,7 @@ export async function DELETE(
     }
 
     console.log('Bot deleted successfully')
+    
     return NextResponse.json({ 
       success: true,
       deleted: params.id
