@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
     // Get user's bots first
     const botsResult = await query(
-      'SELECT id FROM bots WHERE user_id = $1',
+      'SELECT id FROM bots WHERE account_id = $1',
       [session.accountId]  // Changed from session.user.id
     )
 
