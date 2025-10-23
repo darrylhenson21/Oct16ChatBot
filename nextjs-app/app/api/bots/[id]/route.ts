@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { query } from '@/lib/db'
 
+// CORS headers for widget access from any domain
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return NextResponse.json({}, { headers: corsHeaders })
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -16,20 +28,29 @@ export async function GET(
     )
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ error: 'Bot not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'Bot not found' }, 
+        { status: 404, headers: corsHeaders }
+      )
     }
 
     // Return only public-safe fields
     const bot = result.rows[0]
-    return NextResponse.json({
-      id: bot.id,
-      name: bot.name,
-      require_prechat: bot.require_prechat || false,
-      public: bot.public || false,
-    })
+    return NextResponse.json(
+      {
+        id: bot.id,
+        name: bot.name,
+        require_prechat: bot.require_prechat || false,
+        public: bot.public || false,
+      },
+      { headers: corsHeaders }
+    )
   } catch (error) {
     console.error('Get bot error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Internal server error' }, 
+      { status: 500, headers: corsHeaders }
+    )
   }
 }
 
@@ -51,7 +72,7 @@ export async function PATCH(
       'primary_color', 'text_color', 'background_color', 'status',
       'lead_fields', 'require_email', 'instant_lead_email', 'lead_email_recipients',
       'daily_digest_enabled', 'daily_digest_time', 'webhook_url', 'webhook_secret', 'webhook_events',
-      'require_prechat' // ADD THIS TO ALLOWED FIELDS
+      'require_prechat'
     ]
 
     const updates: string[] = []
