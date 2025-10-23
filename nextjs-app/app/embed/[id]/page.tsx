@@ -1,6 +1,8 @@
 'use client'
 
 import { useChat } from 'ai/react'
+import { useSearchParams } from 'next/navigation'
+import { useEffect, useRef } from 'react'
 
 interface PageProps {
   params: { id: string }
@@ -10,23 +12,55 @@ interface PageProps {
 export default function EmbedChatPage({ params, searchParams }: PageProps) {
   const botId = params.id
   const title = searchParams.title || 'Chat'
+  
+  // Get pre-chat form data from URL params
+  const urlSearchParams = useSearchParams()
+  const prechatName = urlSearchParams.get('name')
+  const prechatEmail = urlSearchParams.get('email')
+  const prechatSubmitted = useRef(false)
 
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: `/api/bots/${botId}/chat`,
   })
+
+  useEffect(() => {
+    // Auto-submit pre-chat lead if provided
+    if (prechatName && prechatEmail && !prechatSubmitted.current) {
+      prechatSubmitted.current = true
+      
+      // Send lead to backend
+      fetch('/api/leads/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bot_id: botId,
+          name: prechatName,
+          email: prechatEmail,
+          session_id: `session-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        }),
+      }).catch(err => console.error('Failed to capture pre-chat lead:', err))
+    }
+  }, [botId, prechatName, prechatEmail])
 
   return (
     <div className="h-screen w-screen flex flex-col bg-white">
       {/* Header */}
       <div className="bg-blue-500 text-white px-4 py-3 shadow-md">
         <h1 className="font-semibold text-lg">{title}</h1>
+        {prechatName && (
+          <p className="text-xs text-blue-100 mt-1">
+            Chatting as {prechatName}
+          </p>
+        )}
       </div>
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50" data-testid="embed-chat-messages">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full text-slate-400">
-            <p>👋 Start a conversation...</p>
+            <p>
+              👋 {prechatName ? `Hi ${prechatName}! ` : ''}Start a conversation...
+            </p>
           </div>
         )}
         
@@ -55,7 +89,7 @@ export default function EmbedChatPage({ params, searchParams }: PageProps) {
 
             {message.role === 'user' && (
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs font-semibold">
-                You
+                {prechatName ? prechatName.charAt(0).toUpperCase() : 'You'}
               </div>
             )}
           </div>
