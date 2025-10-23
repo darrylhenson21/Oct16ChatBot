@@ -15,6 +15,7 @@ interface Bot {
   model: string
   temperature: number
   public: boolean
+  require_prechat?: boolean
 }
 
 interface Source {
@@ -228,7 +229,7 @@ export default function UnifiedBotPage({
           className={`pb-3 px-4 border-b-2 font-medium transition-colors ${
             activeTab === 'configuration'
               ? 'border-primary text-primary'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           Configuration
@@ -239,7 +240,7 @@ export default function UnifiedBotPage({
           className={`pb-3 px-4 border-b-2 font-medium transition-colors ${
             activeTab === 'knowledge'
               ? 'border-primary text-primary'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           Knowledge Base
@@ -250,7 +251,7 @@ export default function UnifiedBotPage({
           className={`pb-3 px-4 border-b-2 font-medium transition-colors ${
             activeTab === 'chat'
               ? 'border-primary text-primary'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           Test Chat
@@ -264,12 +265,13 @@ export default function UnifiedBotPage({
             <CardHeader>
               <CardTitle>Bot Settings</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="name">Bot Name</Label>
                 <Input
                   id="name"
                   name="name"
+                  placeholder="Enter bot name"
                   defaultValue={bot.name}
                   required
                   data-testid="bot-name-input"
@@ -281,29 +283,29 @@ export default function UnifiedBotPage({
                 <textarea
                   id="prompt"
                   name="prompt"
+                  rows={6}
+                  className="w-full px-3 py-2 border border-input rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Enter system instructions for your bot..."
                   defaultValue={bot.prompt}
                   required
-                  rows={6}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  placeholder="You are a helpful assistant..."
-                  data-testid="bot-prompt-input"
+                  data-testid="bot-prompt-textarea"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="model">Model</Label>
                   <select
                     id="model"
                     name="model"
+                    className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
                     defaultValue={bot.model}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    required
                     data-testid="bot-model-select"
                   >
-                    <option value="gpt-4o-mini">gpt-4o-mini</option>
-                    <option value="gpt-4o">gpt-4o</option>
-                    <option value="gpt-4-turbo">gpt-4-turbo</option>
-                    <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                   </select>
                 </div>
 
@@ -313,9 +315,10 @@ export default function UnifiedBotPage({
                     id="temperature"
                     name="temperature"
                     type="number"
+                    step="0.1"
                     min="0"
                     max="2"
-                    step="0.1"
+                    placeholder="0.7"
                     defaultValue={bot.temperature}
                     required
                     data-testid="bot-temperature-input"
@@ -335,6 +338,28 @@ export default function UnifiedBotPage({
                 <Label htmlFor="public" className="font-normal">
                   Make this bot publicly accessible (anyone can chat with it)
                 </Label>
+              </div>
+
+              {/* NEW: Pre-chat Form Toggle */}
+              <div className="space-y-2 pt-4 border-t">
+                <div className="flex items-start space-x-2">
+                  <input
+                    type="checkbox"
+                    id="require_prechat"
+                    name="require_prechat"
+                    defaultChecked={bot.require_prechat || false}
+                    className="h-4 w-4 rounded border-gray-300 mt-1"
+                    data-testid="bot-require-prechat-checkbox"
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="require_prechat" className="font-medium">
+                      Require name & email before chat
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Show a form asking for visitor's name and email before starting the chat. This helps capture leads upfront.
+                    </p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
