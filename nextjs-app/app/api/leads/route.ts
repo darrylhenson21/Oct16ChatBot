@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     // Get user's bots first
     const botsResult = await query(
       'SELECT id FROM bots WHERE user_id = $1',
-      [session.user.id]
+      [session.accountId]  // Changed from session.user.id
     )
 
     if (botsResult.rows.length === 0) {
