@@ -5,6 +5,8 @@ import { streamText } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { z } from 'zod'
+import { detectEmail } from '@/lib/lead-detector'
+import { sendLeadNotification } from '@/lib/email'
 
 const Body = z.object({
   messages: z.array(
@@ -26,6 +28,116 @@ function cosineSim(a: number[], b: number[]) {
 
 const THRESHOLD = 0.70      // recall first; adjust later
 const TOP_K = 8
+
+// Helper function to save message to database
+async function saveMessage(
+  botId: string,
+  sessionId: string,
+  role: 'user' | 'assistant',
+  content: string
+) {
+  try {
+    const { error } = await supabaseAdmin()
+      .from('messages')
+      .insert({
+        bot_id: botId,
+        session_id: sessionId,
+        role,
+        content,
+        created_at: new Date().toISOString(),
+      })
+    
+    if (error) {
+      console.error('Failed to save message:', error)
+    }
+  } catch (err) {
+    console.error('Error saving message:', err)
+  }
+}
+
+// Helper function to capture lead
+async function captureLead(
+  botId: string,
+  botName: string,
+  email: string,
+  sessionId: string
+) {
+  try {
+    const supabase = supabaseAdmin()
+    
+    // Check if lead already exists for this bot
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('bot_id', botId)
+      .eq('email', email)
+      .single()
+
+    if (existingLead) {
+      console.log('Lead already exists:', email)
+      return { alreadyExists: true }
+    }
+
+    // Insert new lead
+    const { data: newLead, error: insertError } = await supabase
+      .from('leads')
+      .insert({
+        bot_id: botId,
+        email,
+        session_id: sessionId,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+
+    if (insertError) {
+      console.error('Failed to insert lead:', insertError)
+      return { error: insertError }
+    }
+
+    const leadId = newLead.id
+
+    // Send email notification
+    try {
+      await sendLeadNotification({
+        email,
+        botName,
+        sessionId,
+        capturedAt: new Date().toLocaleString(),
+      })
+
+      // Mark as sent
+      await supabase
+        .from('leads')
+        .update({
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+          attempts: 1,
+        })
+        .eq('id', leadId)
+
+      console.log('✅ Lead captured and notification sent:', email)
+      return { success: true, leadId }
+    } catch (emailError) {
+      // Mark as failed
+      await supabase
+        .from('leads')
+        .update({
+          status: 'failed',
+          attempts: 1,
+          last_error: String(emailError),
+        })
+        .eq('id', leadId)
+
+      console.error('❌ Failed to send lead notification:', emailError)
+      return { error: emailError }
+    }
+  } catch (error) {
+    console.error('Failed to capture lead:', error)
+    return { error }
+  }
+}
 
 export async function POST(
   req: Request,
@@ -50,8 +162,31 @@ export async function POST(
       console.log('Private bot access - owner check not implemented yet')
     }
 
-    // ==== RAG ====
+    // ==== SAVE USER MESSAGE & DETECT LEADS ====
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
+    if (lastUserMessage) {
+      // Generate session ID (you can improve this with actual session tracking)
+      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      
+      // Save message to database
+      await saveMessage(botId, sessionId, 'user', lastUserMessage.content)
+      
+      // Detect and capture leads (async, don't block chat response)
+      const detectedEmail = detectEmail(lastUserMessage.content)
+      if (detectedEmail) {
+        console.log('📧 Email detected in message:', detectedEmail)
+        
+        // Capture lead asynchronously (don't block chat response)
+        captureLead(
+          botId,
+          bot.name || 'Chatbot',
+          detectedEmail,
+          sessionId
+        ).catch(err => console.error('Lead capture error:', err))
+      }
+    }
+
+    // ==== RAG ====
     let contextChunks: string[] = []
     let foundContext = false
 
