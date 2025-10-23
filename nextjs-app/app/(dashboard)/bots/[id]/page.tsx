@@ -25,6 +25,7 @@ export default async function BotDetailPage({ params }: { params: { id: string }
       model: formData.get('model') as string,
       temperature: parseFloat(formData.get('temperature') as string),
       public: formData.get('public') === 'on',
+      require_prechat: formData.get('require_prechat') === 'on',  // ADD THIS LINE
     }
 
     const { error } = await supabaseAnon()
@@ -51,6 +52,7 @@ export default async function BotDetailPage({ params }: { params: { id: string }
         </h1>
         <p className="text-slate-500 mt-1">Configure your chatbot settings</p>
       </div>
+
       <UnifiedBotPage bot={bot} save={save} embedSnippet={embedSnippet} />
     </div>
   )
