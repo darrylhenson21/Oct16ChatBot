@@ -118,7 +118,7 @@ export default function LeadsPage() {
             No leads captured yet
           </h3>
           <p className="text-slate-500">
-            When users share their email in chat, they'll appear here.
+            When users share their email in chat, they will appear here.
           </p>
         </div>
       ) : (
