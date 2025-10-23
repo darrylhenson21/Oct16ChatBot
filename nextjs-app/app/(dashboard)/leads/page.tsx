@@ -1,17 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Mail, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Mail, RefreshCw } from 'lucide-react'
 
 interface Lead {
   id: string
@@ -19,21 +9,22 @@ interface Lead {
   bot_name: string
   email: string
   session_id: string
-  status: 'pending' | 'sent' | 'failed'
+  status: string
   sent_at: string | null
   attempts: number
-  last_error: string | null
   created_at: string
 }
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
 
-  const fetchLeads = async () => {
+  useEffect(() => {
+    fetchLeads()
+  }, [])
+
+  async function fetchLeads() {
     try {
-      setRefreshing(true)
       const response = await fetch('/api/leads')
       const data = await response.json()
       setLeads(data.leads || [])
@@ -41,44 +32,7 @@ export default function LeadsPage() {
       console.error('Failed to fetch leads:', error)
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
-  }
-
-  useEffect(() => {
-    fetchLeads()
-  }, [])
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'sent':
-        return (
-          <Badge className="bg-green-100 text-green-800">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Sent
-          </Badge>
-        )
-      case 'failed':
-        return (
-          <Badge className="bg-red-100 text-red-800">
-            <XCircle className="w-3 h-3 mr-1" />
-            Failed
-          </Badge>
-        )
-      case 'pending':
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800">
-            <Clock className="w-3 h-3 mr-1" />
-            Pending
-          </Badge>
-        )
-      default:
-        return <Badge>{status}</Badge>
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString()
   }
 
   if (loading) {
@@ -101,14 +55,13 @@ export default function LeadsPage() {
             Captured email addresses from your chatbots
           </p>
         </div>
-        <Button
+        <button
           onClick={fetchLeads}
-          disabled={refreshing}
-          variant="outline"
+          className="px-4 py-2 border rounded-lg hover:bg-slate-50"
         >
-          <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className="w-4 h-4 inline mr-2" />
           Refresh
-        </Button>
+        </button>
       </div>
 
       {leads.length === 0 ? (
@@ -122,42 +75,64 @@ export default function LeadsPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-slate-200">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Bot</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Captured</TableHead>
-                <TableHead>Sent</TableHead>
-                <TableHead>Attempts</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  Bot
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  Captured
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
+                  Attempts
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
               {leads.map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell className="font-medium">
+                <tr key={lead.id}>
+                  <td className="px-6 py-4">
                     
                       href={`mailto:${lead.email}`}
-                      className="text-primary hover:underline"
+                      className="text-blue-600 hover:underline"
                     >
                       {lead.email}
                     </a>
-                  </TableCell>
-                  <TableCell>{lead.bot_name || 'Unknown'}</TableCell>
-                  <TableCell>{getStatusBadge(lead.status)}</TableCell>
-                  <TableCell className="text-slate-500">
-                    {formatDate(lead.created_at)}
-                  </TableCell>
-                  <TableCell className="text-slate-500">
-                    {lead.sent_at ? formatDate(lead.sent_at) : '-'}
-                  </TableCell>
-                  <TableCell>{lead.attempts}</TableCell>
-                </TableRow>
+                  </td>
+                  <td className="px-6 py-4 text-slate-700">
+                    {lead.bot_name || 'Unknown'}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full ${
+                        lead.status === 'sent'
+                          ? 'bg-green-100 text-green-800'
+                          : lead.status === 'failed'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
+                      {lead.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-slate-500 text-sm">
+                    {new Date(lead.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 text-slate-500">
+                    {lead.attempts}
+                  </td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
       )}
 
