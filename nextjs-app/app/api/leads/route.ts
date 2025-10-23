@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { query } from '@/lib/db'
 
-// GET /api/leads - Fetch all leads or filter by bot
 export async function GET(request: Request) {
   try {
     const session = await getSession()
@@ -10,39 +9,41 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const botId = searchParams.get('bot_id')
+    // Get user's bots first
+    const botsResult = await query(
+      'SELECT id FROM bots WHERE user_id = $1',
+      [session.user.id]
+    )
 
-    let sql = `
-      SELECT 
-        l.id,
-        l.bot_id,
-        l.email,
-        l.session_id,
-        l.status,
-        l.sent_at,
-        l.attempts,
-        l.last_error,
-        l.created_at,
-        b.name as bot_name
-      FROM leads l
-      LEFT JOIN bots b ON l.bot_id = b.bot_id
-      WHERE 1=1
-    `
-    const params: any[] = []
-
-    if (botId) {
-      sql += ` AND l.bot_id = $1`
-      params.push(botId)
+    if (botsResult.rows.length === 0) {
+      return NextResponse.json({ leads: [] })
     }
 
-    sql += ` ORDER BY l.created_at DESC LIMIT 100`
+    const botIds = botsResult.rows.map(bot => bot.id)
 
-    const result = await query(sql, params)
+    // Get leads for user's bots with bot names
+    const leadsResult = await query(
+      `SELECT 
+        leads.id,
+        leads.bot_id,
+        leads.name,
+        leads.email,
+        leads.session_id,
+        leads.status,
+        leads.sent_at,
+        leads.attempts,
+        leads.created_at,
+        bots.name as bot_name
+      FROM leads
+      LEFT JOIN bots ON leads.bot_id = bots.id
+      WHERE leads.bot_id = ANY($1)
+      ORDER BY leads.created_at DESC`,
+      [botIds]
+    )
 
     return NextResponse.json({
-      leads: result.rows,
-      total: result.rows.length,
+      leads: leadsResult.rows,
+      total: leadsResult.rows.length,
     })
   } catch (error) {
     console.error('Failed to fetch leads:', error)
