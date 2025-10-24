@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     // Get user's bots first
     const botsResult = await query(
       'SELECT id FROM bots WHERE account_id = $1',
-      [session.accountId]  // Changed from session.user.id
+      [session.accountId]
     )
 
     if (botsResult.rows.length === 0) {
@@ -20,6 +20,9 @@ export async function GET(request: Request) {
     }
 
     const botIds = botsResult.rows.map(bot => bot.id)
+
+    // Create placeholders for IN clause: $1, $2, $3, etc.
+    const placeholders = botIds.map((_, i) => `$${i + 1}`).join(', ')
 
     // Get leads for user's bots with bot names
     const leadsResult = await query(
@@ -36,9 +39,9 @@ export async function GET(request: Request) {
         bots.name as bot_name
       FROM leads
       LEFT JOIN bots ON leads.bot_id = bots.id
-      WHERE leads.bot_id = ANY($1::uuid[])
+      WHERE leads.bot_id IN (${placeholders})
       ORDER BY leads.created_at DESC`,
-      [botIds]
+      botIds
     )
 
     return NextResponse.json({
