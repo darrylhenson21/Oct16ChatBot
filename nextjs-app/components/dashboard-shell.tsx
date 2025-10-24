@@ -7,8 +7,8 @@ import { Home, Bell, Key, BarChart3, Users, Settings } from "lucide-react"
 
 const navigation = [
   { name: "Bots", href: "/bots", icon: Home },
-  { name: "Notifications", href: "/notifications", icon: Bell },
-    // TEMPORARILY HIDDEN - Will re-enable when user API keys feature is ready
+  // TEMPORARILY HIDDEN - Will re-enable when user API keys feature is ready
+  // { name: "Notifications", href: "/notifications", icon: Bell },
   //  { name: "API Keys", href: "/keys", icon: Key },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Leads", href: "/leads", icon: Users },
