@@ -113,7 +113,8 @@ export const query = async (text: string, params?: any[]) => {
           text_color: '#ffffff',
           background_color: '#1e293b',
           status: 'needs_source',
-          public: true
+          public: true,
+          require_prechat: false  // ADDED: Default to false for new bots
         })
         .select()
         .single()
