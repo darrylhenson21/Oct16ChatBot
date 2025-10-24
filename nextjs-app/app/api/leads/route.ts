@@ -36,7 +36,7 @@ export async function GET(request: Request) {
         bots.name as bot_name
       FROM leads
       LEFT JOIN bots ON leads.bot_id = bots.id
-      WHERE leads.bot_id = ANY($1)
+      WHERE leads.bot_id = ANY($1::uuid[])
       ORDER BY leads.created_at DESC`,
       [botIds]
     )
