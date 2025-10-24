@@ -172,6 +172,49 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [], rowCount: count || 0 }
     }
     
+    // Handle SELECT from leads with JOIN
+    if (text.includes('FROM leads') && text.includes('LEFT JOIN bots')) {
+      const botIds = params || []
+      console.log('Fetching leads for bot IDs:', botIds)
+      
+      // Get leads
+      let leadsQuery = supabase
+        .from('leads')
+        .select('id, bot_id, name, email, session_id, status, sent_at, attempts, created_at')
+      
+      // Filter by bot_ids if provided
+      if (botIds.length > 0) {
+        leadsQuery = leadsQuery.in('bot_id', botIds)
+      }
+      
+      const { data: leadsData, error: leadsError } = await leadsQuery.order('created_at', { ascending: false })
+      
+      if (leadsError) throw leadsError
+      
+      // Get bot names
+      const uniqueBotIds = [...new Set((leadsData || []).map(lead => lead.bot_id))]
+      const { data: botsData, error: botsError } = await supabase
+        .from('bots')
+        .select('id, name')
+        .in('id', uniqueBotIds)
+      
+      if (botsError) throw botsError
+      
+      // Map bot names to leads
+      const botNameMap = (botsData || []).reduce((acc, bot) => {
+        acc[bot.id] = bot.name
+        return acc
+      }, {} as Record<string, string>)
+      
+      const leadsWithBotNames = (leadsData || []).map(lead => ({
+        ...lead,
+        bot_name: botNameMap[lead.bot_id] || null
+      }))
+      
+      console.log('Found leads:', leadsWithBotNames.length)
+      return { rows: leadsWithBotNames, rowCount: leadsWithBotNames.length }
+    }
+    
     // Default return
     console.warn('Unhandled query type:', text.substring(0, 100))
     return { rows: [], rowCount: 0 }
