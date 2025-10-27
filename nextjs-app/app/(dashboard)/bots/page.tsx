@@ -18,7 +18,7 @@ interface Bot {
   updated_at: string
 }
 
-const MAX_BOTS = 10
+const MAX_BOTS = 30
 
 export default function BotsPage() {
   const [bots, setBots] = useState<Bot[]>([])
