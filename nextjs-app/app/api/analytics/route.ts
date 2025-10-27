@@ -26,8 +26,8 @@ export async function GET(request: Request) {
     const analyticsResult = await query(
       `SELECT 
         bot_id,
-        COUNT(*) as total_chats,
-        COUNT(DISTINCT session_id) as unique_users,
+        COUNT(*) as total_messages,
+        COUNT(DISTINCT session_id) as conversations,
         MAX(created_at) as last_active
       FROM messages
       WHERE bot_id = ANY($1)
@@ -44,8 +44,8 @@ export async function GET(request: Request) {
     const analytics = analyticsResult.rows.map(row => ({
       bot_id: row.bot_id,
       bot_name: botMap[row.bot_id] || 'Unknown Bot',
-      total_chats: parseInt(row.total_chats) || 0,
-      unique_users: parseInt(row.unique_users) || 0,
+      total_messages: parseInt(row.total_messages) || 0,
+      conversations: parseInt(row.conversations) || 0,
       last_active: row.last_active || null,
     }))
 
@@ -56,15 +56,15 @@ export async function GET(request: Request) {
         analytics.push({
           bot_id: bot.id,
           bot_name: bot.name,
-          total_chats: 0,
-          unique_users: 0,
+          total_messages: 0,
+          conversations: 0,
           last_active: null,
         })
       }
     })
 
-    // Sort by total chats descending
-    analytics.sort((a, b) => b.total_chats - a.total_chats)
+    // Sort by total messages descending
+    analytics.sort((a, b) => b.total_messages - a.total_messages)
 
     return NextResponse.json({ analytics })
   } catch (error) {
