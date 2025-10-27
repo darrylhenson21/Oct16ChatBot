@@ -12,7 +12,7 @@ const navigation = [
   //  { name: "API Keys", href: "/keys", icon: Key },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Leads", href: "/leads", icon: Users },
-  { name: "Admin", href: "/settings", icon: Settings, adminOnly: true },
+  // { name: "Admin", href: "/settings", icon: Settings, adminOnly: true },
 ]
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
