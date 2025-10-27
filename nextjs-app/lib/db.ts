@@ -211,13 +211,13 @@ export const query = async (text: string, params?: any[]) => {
           acc[msg.bot_id] = {
             bot_id: msg.bot_id,
             sessions: new Set(),
-            total_chats: 0,
+            total_messages: 0,
             last_active: msg.created_at,
           }
         }
         
         acc[msg.bot_id].sessions.add(msg.session_id)
-        acc[msg.bot_id].total_chats++
+        acc[msg.bot_id].total_messages++
         
         if (new Date(msg.created_at) > new Date(acc[msg.bot_id].last_active)) {
           acc[msg.bot_id].last_active = msg.created_at
@@ -228,8 +228,8 @@ export const query = async (text: string, params?: any[]) => {
 
       const rows = Object.values(analytics).map((a: any) => ({
         bot_id: a.bot_id,
-        total_chats: a.total_chats.toString(),
-        unique_users: a.sessions.size.toString(),
+        total_messages: a.total_messages.toString(),
+        conversations: a.sessions.size.toString(),
         last_active: a.last_active,
       }))
 
