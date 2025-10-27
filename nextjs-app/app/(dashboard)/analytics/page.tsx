@@ -6,8 +6,8 @@ import { BarChart3, MessageSquare, Users, Clock } from 'lucide-react'
 interface BotAnalytics {
   bot_id: string
   bot_name: string
-  total_chats: number
-  unique_users: number
+  total_messages: number
+  conversations: number
   last_active: string | null
 }
 
@@ -91,13 +91,13 @@ export default function AnalyticsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4" />
-                    Total Chats
+                    Total Messages
                   </div>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
-                    Unique Users
+                    Conversations
                   </div>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
@@ -116,12 +116,12 @@ export default function AnalyticsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-slate-700 font-semibold">
-                      {bot.total_chats.toLocaleString()}
+                      {bot.total_messages.toLocaleString()}
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-slate-700 font-semibold">
-                      {bot.unique_users.toLocaleString()}
+                      {bot.conversations.toLocaleString()}
                     </div>
                   </td>
                   <td className="px-6 py-4">
