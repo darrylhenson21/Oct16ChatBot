@@ -86,8 +86,20 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [], rowCount: 0 }
     }
     
+    // Handle simple SELECT from bots (for analytics - get bot names)
+    if (text.includes('SELECT id, name FROM bots') && text.includes('WHERE account_id')) {
+      const accountId = params?.[0]
+      const { data, error } = await supabase
+        .from('bots')
+        .select('id, name')
+        .eq('account_id', accountId)
+      
+      if (error) throw error
+      return { rows: data || [], rowCount: data?.length || 0 }
+    }
+    
     // Handle simple SELECT from bots
-    if (text.includes('FROM bots') && text.includes('SELECT')) {
+    if (text.includes('FROM bots') && text.includes('SELECT') && !text.includes('account_id')) {
       const { data, error } = await supabase.from('bots').select('*')
       if (error) throw error
       return { rows: data || [], rowCount: data?.length || 0 }
@@ -114,7 +126,7 @@ export const query = async (text: string, params?: any[]) => {
           background_color: '#1e293b',
           status: 'needs_source',
           public: true,
-          require_prechat: false  // ADDED: Default to false for new bots
+          require_prechat: false
         })
         .select()
         .single()
@@ -171,6 +183,54 @@ export const query = async (text: string, params?: any[]) => {
       
       console.log('Delete completed, rows affected:', count)
       return { rows: [], rowCount: count || 0 }
+    }
+    
+    // Handle analytics query - MUST come before leads handler
+    if (text.includes('FROM messages') && text.includes('COUNT(DISTINCT session_id)')) {
+      const botIds = params?.[0] || []
+      console.log('Fetching analytics for bot IDs:', botIds)
+      
+      if (botIds.length === 0) {
+        return { rows: [], rowCount: 0 }
+      }
+
+      const { data, error } = await supabase
+        .from('messages')
+        .select('bot_id, session_id, created_at')
+        .in('bot_id', botIds)
+      
+      if (error) throw error
+
+      // Group by bot_id and calculate metrics
+      const analytics = (data || []).reduce((acc, msg) => {
+        if (!acc[msg.bot_id]) {
+          acc[msg.bot_id] = {
+            bot_id: msg.bot_id,
+            sessions: new Set(),
+            total_chats: 0,
+            last_active: msg.created_at,
+          }
+        }
+        
+        acc[msg.bot_id].sessions.add(msg.session_id)
+        acc[msg.bot_id].total_chats++
+        
+        if (new Date(msg.created_at) > new Date(acc[msg.bot_id].last_active)) {
+          acc[msg.bot_id].last_active = msg.created_at
+        }
+        
+        return acc
+      }, {} as Record<string, any>)
+
+      const rows = Object.values(analytics).map((a: any) => ({
+        bot_id: a.bot_id,
+        total_chats: a.total_chats.toString(),
+        unique_users: a.sessions.size.toString(),
+        last_active: a.last_active,
+      }))
+
+      console.log('Analytics results:', rows)
+      return { rows, rowCount: rows.length }
     }
     
     // Handle SELECT from leads with JOIN
