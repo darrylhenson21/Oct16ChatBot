@@ -86,12 +86,16 @@ export const query = async (text: string, params?: any[]) => {
       return { rows: [], rowCount: 0 }
     }
     
-    // Handle simple SELECT from bots (for analytics - get bot names)
-    if (text.includes('SELECT id, name FROM bots') && text.includes('WHERE account_id')) {
+    // Handle SELECT id or SELECT id, name FROM bots WHERE account_id
+    if ((text.includes('SELECT id FROM bots') || text.includes('SELECT id, name FROM bots')) && text.includes('WHERE account_id')) {
       const accountId = params?.[0]
+      
+      // Determine which fields to select based on query
+      const selectFields = text.includes('SELECT id, name') ? 'id, name' : 'id'
+      
       const { data, error } = await supabase
         .from('bots')
-        .select('id, name')
+        .select(selectFields)
         .eq('account_id', accountId)
       
       if (error) throw error
