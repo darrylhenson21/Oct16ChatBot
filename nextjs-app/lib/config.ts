@@ -5,7 +5,7 @@ export const config = {
     timezone: process.env.TIMEZONE || 'America/Chicago',
   },
   limits: {
-    botLimit: parseInt(process.env.BOT_LIMIT || '10'),
+    botLimit: parseInt(process.env.BOT_LIMIT || '30'),
     domainsPerBot: parseInt(process.env.DOMAINS_PER_BOT || '10'),
     accountDomainCap: parseInt(process.env.ACCOUNT_DOMAIN_CAP || '50'),
     crawlMaxPages: parseInt(process.env.CRAWL_MAX_PAGES || '10'),
